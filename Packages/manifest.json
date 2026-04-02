@@ -14,7 +14,8 @@
     "com.unity.ugui": "2.0.0",
     "com.unity.visualscripting": "1.9.10",
     "com.unity.xr.management": "4.5.4",
-    "com.unity.xr.oculus": "4.5.2",
+    "com.unity.xr.meta-openxr": "2.5.0",
+    "jp.keijiro.apriltag": "1.0.2",
     "com.unity.modules.accessibility": "1.0.0",
     "com.unity.modules.adaptiveperformance": "1.0.0",
     "com.unity.modules.ai": "1.0.0",
@@ -52,5 +53,14 @@
   },
   "testables": [
     "com.meta.xr.mrutilitykit"
+  ],
+  "scopedRegistries": [
+    {
+      "name": "Keijiro",
+      "url": "https://registry.npmjs.com",
+      "scopes": [
+        "jp.keijiro"
+      ]
+    }
   ]
 }
