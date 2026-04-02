@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep \"value: Nudge\\\\|value: Rotate\\\\|value: Save\\\\|value: Setup\" \"C:\\\\_G\\\\Kines-MR-Meta-All/Assets/_Scene/03-10-26 Anchor Update - Kill the Crystals.unity\" | sed 's/^[[:space:]]*//' | sort | uniq)",
+      "Bash(find \"C:\\\\_G\\\\Unity-MRUtilityKitSample/Library/PackageCache\" -maxdepth 1 -type d -name \"*com.meta.xr*\" 2>/dev/null | head -20)",
+      "Bash(find \"C:/_G/Unity-MRUtilityKitSample/Library/PackageCache\" -type f -name \"*Poke*.cs\" 2>/dev/null | head -20)",
+      "Bash(find \"C:/_G/Unity-MRUtilityKitSample/Library/PackageCache\" -type f -name \"*Interactable*.cs\" 2>/dev/null | head -30)",
+      "Bash(find \"C:/_G/Unity-MRUtilityKitSample/Library/PackageCache/com.meta.xr.mrutilitykit@6d21b459f6d3\" -type f \\\\\\( -name \"*Button*\" -o -name \"*Poke*\" -o -name \"*Interactable*\" \\\\\\) 2>/dev/null | head -30)",
+      "Bash(find \"C:/_G/Unity-MRUtilityKitSample/Library/PackageCache/com.meta.xr.sdk.core@f8b4cfb2789f\" -type f \\\\\\( -name \"*Button*\" -o -name \"*Poke*\" -o -name \"*Interactable*\" \\\\\\) 2>/dev/null | head -30)",
+      "Bash(find \"C:/_G/Unity-MRUtilityKitSample/Assets/MRUKSamples\" -type f -name \"*.cs\" | xargs grep -l \"Button\\\\|Poke\\\\|Interactable\" 2>/dev/null | head -20)",
+      "Bash(find \"C:/_G/Unity-MRUtilityKitSample/Assets/MRUKSamples\" -type f -name \"*Button*\" 2>/dev/null | head -20)",
+      "Bash(find \"C:/_G/Unity-MRUtilityKitSample/Library/PackageCache\" -type f -name \"*.cs\" 2>/dev/null | xargs grep -l \"PokeInteractable\" | head -10)",
+      "Bash(find \"C:/_G/Unity-MRUtilityKitSample/Assets\" -type f -name \"*.cs\" 2>/dev/null | xargs grep -l \"PokeInteractable\\\\|Interactable\" 2>/dev/null | head -20)",
+      "Bash(find \"C:/_G/Unity-MRUtilityKitSample\" -type f \\\\\\( -name \"*.cs\" -o -name \"*.prefab\" \\\\\\) 2>/dev/null | xargs grep -l \"Poke\\\\|XRI\\\\|Interactable\" 2>/dev/null | head -30)",
+      "Bash(find \"C:/_G/Unity-MRUtilityKitSample/Library/PackageCache/com.meta.xr.sdk.core@f8b4cfb2789f\" -type f -name \"*.cs\" | xargs grep -l \"class.*Interactable\\\\|namespace.*Interaction\" | head -20)",
+      "Bash(find \"C:/_G/Unity-MRUtilityKitSample/Library/PackageCache/com.meta.xr.mrutilitykit@6d21b459f6d3\" -type f -name \"*.cs\" | xargs grep -l \"Interactable\\\\|Button\" 2>/dev/null | head -20)",
+      "Bash(find \"C:/_G/Unity-MRUtilityKitSample\" -type f \\\\\\( -name \"*.prefab\" -o -name \"*.md\" -o -name \"*.txt\" \\\\\\) 2>/dev/null | xargs grep -l \"PokeInteractable\\\\|poke.*button\\\\|XRI\\\\|Interaction\" 2>/dev/null | head -20)",
+      "WebSearch",
+      "WebFetch(domain:developers.meta.com)",
+      "Bash(find \"C:/_G/Unity-MRUtilityKitSample\" -type f -name \"*.cs\" 2>/dev/null | xargs grep -h \"class PokeInteractable\\\\|class PointableElement\\\\|class.*Surface\\\\|class RoundedBoxProperties\" 2>/dev/null | head -20)",
+      "Bash(find \"C:/_G/Unity-MRUtilityKitSample\" -type d -name \"*interaction*\" 2>/dev/null | head -20)",
+      "Bash(find \"C:\\\\_G\\\\Unity-MRUtilityKitSample\\\\Assets\\\\MRUKSamples\" -name \"*.unity\" -type f 2>/dev/null | head -10)",
+      "Bash(find \"C:\\\\_G\\\\Unity-MRUtilityKitSample\\\\Library\\\\PackageCache\" -maxdepth 1 -type d -name \"*com.meta.xr*\" 2>/dev/null | head -20)",
+      "Bash(find \"C:\\\\_G\\\\Unity-MRUtilityKitSample\\\\Library\\\\PackageCache\" -type f -name \"*.cs\" 2>/dev/null | xargs grep -l \"PokeInteractable\\\\|PointableUnityEventWrapper\" 2>/dev/null | head -10)",
+      "Bash(find \"C:\\\\_G\\\\Unity-MRUtilityKitSample\\\\Library\\\\PackageCache\\\\com.meta.xr.sdk.core@f8b4cfb2789f\" -type f -name \"*.cs\" | xargs grep -l \"Poke\\\\|Interact\" 2>/dev/null | head -20)",
+      "Bash(find \"C:\\\\_G\\\\Unity-MRUtilityKitSample\" -path \"*/Library/PackageCache*\" -prune -o -type f -name \"*.cs\" -print | xargs grep -l \"PokeInteractable\\\\|PointableUnityEventWrapper\" 2>/dev/null)",
+      "Bash(find \"C:\\\\_G\\\\Unity-MRUtilityKitSample\\\\Assets\" -type f -name \"*.cs\" -print 2>/dev/null | head -20)",
+      "Bash(find \"C:\\\\_G\\\\Unity-MRUtilityKitSample\\\\Library\\\\PackageCache\\\\com.meta.xr.sdk.core@f8b4cfb2789f\" -type f \\\\\\( -name \"*.cs\" -o -name \"*.asset\" \\\\\\) | xargs grep -l \"poke\\\\|Poke\" 2>/dev/null)",
+      "Bash(grep -r \"com.meta.xr.sdk.interaction\" \"C:\\\\_G\\\\Unity-MRUtilityKitSample\" --include=\"*.json\" --include=\"*.asmdef\" 2>/dev/null | grep -v \".meta\")",
+      "Bash(find \"C:\\\\_G\\\\Unity-MRUtilityKitSample\\\\Library\\\\PackageCache\\\\com.meta.xr.sdk.core@f8b4cfb2789f\\\\Scripts\\\\Composition\" -type f -name \"*.cs\" 2>/dev/null | head -20)",
+      "Bash(find \"C:\\\\_G\\\\Unity-MRUtilityKitSample\\\\Library\\\\PackageCache\\\\com.meta.xr.sdk.core@f8b4cfb2789f\\\\Scripts\\\\BuildingBlocks\\\\MultiplayerBlocks\\\\Shared\" -type f -name \"*.cs\" 2>/dev/null | xargs grep -l \"Oculus.Interaction\")",
+      "Bash(for file:*)",
+      "Bash(do echo:*)",
+      "Read(//c/_G/Unity-MRUtilityKitSample/**)",
+      "Bash(done)"
+    ]
+  }
+}

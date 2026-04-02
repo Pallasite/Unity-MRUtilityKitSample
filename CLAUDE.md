@@ -54,6 +54,30 @@ Each sample has its own scene (`.unity`), scripts, materials, and prefabs. `Star
 
 The single editor script (`Assets/Editor/BuildMRUKSamples.cs`) handles APK build configuration. Scripts use the `[MetaCodeSample]` attribute for Meta's documentation system.
 
+### KinesResearch Sample (Ported from Kines-MR-Meta-All)
+
+`Assets/MRUKSamples/KinesResearch/` contains motor adaptation research scripts ported from a Unity 2022 / SDK v69 project. These scripts use **snake_case** naming (not the `.editorconfig` convention) — preserve this style when editing them.
+
+**Core loop:** CSV file defines trials -> `CSVLoader` parses -> `ObstacleManager` runs distance-based triggering -> `IObstacleBehavior` moves obstacle -> auto-reset advances to next trial.
+
+**Key classes:**
+- `ObstacleManager` — Central orchestrator: distance triggers, state machine (armed/moved/reset), delegates to `IObstacleBehavior`
+- `CSVLoader` + `TrialCondition` — Loads `trial_conditions.csv` from `Application.persistentDataPath`, manages trial progression
+- `IObstacleBehavior` / `DefaultObstacleBehavior` / `DogObstacleBehavior` — Strategy pattern for obstacle movement
+- `AnchorManager` — `OVRSpatialAnchor` + `SpatialAnchorCoreBuildingBlock` for world-locking obstacles
+- `OcclusionSwapper` — Distance-based material swap with static registry for bulk control
+- `FinesseTouch` / `WorldTouch` — Precision nudging (cm/mm) for obstacle calibration
+- `Aligner` — Calibration cube-based path alignment
+- `TrialCounter` — Color-coded trial status UI (green=active, red=inactive, magenta=missing)
+
+**Scene hierarchy pattern:**
+```
+obstacle_anchor (parent, OVRSpatialAnchor, world-locked)
+  └── obstacle (child, visuals — reset returns to local 0,0,0)
+```
+
+**Scene setup required in Unity Editor:** Building Blocks (Camera Rig, Spatial Anchor Core), MRUK component, Manager object with all scripts wired, calibration cubes, experimenter UI panel. See source scene `Kines-MR-Meta-All/Assets/_Scene/03-10-26 Anchor Update - Kill the Crystals.unity` for reference inspector values.
+
 ## C# Code Style
 
 Defined in `.editorconfig`:
