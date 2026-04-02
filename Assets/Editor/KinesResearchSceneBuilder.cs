@@ -1,13 +1,25 @@
 using System.Collections.Generic;
 using UnityEditor;
+using UnityEditor.Events;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Events;
 using TMPro;
+using Oculus.Interaction;
+using Oculus.Interaction.Surfaces;
+using Oculus.Interaction.HandGrab;
+using Oculus.Interaction.Grab;
 
 /// <summary>
 /// Editor script that builds the full Kines Research scene hierarchy from a menu item.
 /// Menu: Meta > Samples > Build Kines Research Scene
+///
+/// Creates: Manager (9 components), obstacle hierarchy, 4 calibration cubes,
+/// NudgeManager panel (12 poke buttons), CommandStaff panel (8 poke buttons + 3 indicators),
+/// and trial status displays. All cross-references are wired automatically.
+///
+/// ISDK components (PokeInteractable, HandGrabInteractable, etc.) are added for
+/// hand-tracked poke and grab interaction support.
 /// </summary>
 public static class KinesResearchSceneBuilder
 {
@@ -16,7 +28,6 @@ public static class KinesResearchSceneBuilder
     private const float ButtonHeight = 0.04f;
     private const float ButtonSpacingX = 0.13f;
     private const float ButtonSpacingY = 0.045f;
-    private const float ButtonDepth = 0.001f;
 
     [MenuItem("Meta/Samples/Build Kines Research Scene")]
     public static void BuildScene()
@@ -33,7 +44,6 @@ public static class KinesResearchSceneBuilder
             {
                 return;
             }
-            // Clean up existing
             CleanupExisting();
         }
 
@@ -69,7 +79,7 @@ public static class KinesResearchSceneBuilder
         Debug.Log("Kines Research Scene built successfully. Manual steps remaining:\n" +
             "1. Add Building Blocks (Camera Rig, Spatial Anchor Core)\n" +
             "2. Wire anchor_core_building_block on AnchorManager\n" +
-            "3. Import obstacle prefabs → assign to ObstacleManager.obstacle_visuals\n" +
+            "3. Import obstacle prefabs -> assign to ObstacleManager.obstacle_visuals\n" +
             "4. Import depth occlusion materials\n" +
             "5. Add scene to Build Settings");
     }
@@ -209,12 +219,12 @@ public static class KinesResearchSceneBuilder
         cube.transform.position = position;
         cube.transform.localScale = Vector3.one * 0.05f;
 
-        // Give it a distinct yellow material
         var renderer = cube.GetComponent<MeshRenderer>();
         var mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
         mat.color = Color.yellow;
         renderer.sharedMaterial = mat;
 
+        MakeGrabbable(cube, includeRayGrab: false, includeDistanceGrab: false);
         Undo.RegisterCreatedObjectUndo(cube, "Create " + name);
         return cube;
     }
@@ -260,33 +270,93 @@ public static class KinesResearchSceneBuilder
 
     // ==================== Poke Button ====================
 
+    /// <summary>
+    /// Creates a poke button with full ISDK component stack:
+    /// Root (PokeInteractable, InteractableUnityEventWrapper, ButtonClickRelay)
+    ///   Model/ Surface/ (PlaneSurface, ClippedPlaneSurface, BoundsClipper)
+    ///   Visuals/ ButtonVisual/ (quad + text label)
+    ///            ButtonBack/ (backdrop quad)
+    /// </summary>
     private static GameObject CreatePokeButton(string label, float width = ButtonWidth, float height = ButtonHeight)
     {
         var root = new GameObject("Btn_" + label);
 
-        // Button visual (quad)
-        var visual = GameObject.CreatePrimitive(PrimitiveType.Quad);
-        visual.name = "ButtonVisual";
-        visual.transform.SetParent(root.transform);
-        visual.transform.localPosition = Vector3.zero;
-        visual.transform.localScale = new Vector3(width, height, 1f);
+        // ---- Model / Surface child (for ISDK poke surface) ----
+        var model = CreateChild(root, "Model");
+        var surface = CreateChild(model, "Surface");
+        surface.transform.localScale = new Vector3(2f, 1f, 0.001f);
 
-        // Remove the default collider from the quad - we'll add our own on root
-        var quadCollider = visual.GetComponent<MeshCollider>();
+        // PlaneSurface — facing forward so poke works from the front
+        var planeSurface = surface.AddComponent<PlaneSurface>();
+        planeSurface.Facing = PlaneSurface.NormalFacing.Forward;
+
+        // BoundsClipper — defines the rectangular interactive area
+        var boundsClipper = surface.AddComponent<BoundsClipper>();
+        boundsClipper.Size = new Vector3(width, height, 0.1f);
+        boundsClipper.Position = Vector3.zero;
+
+        // ClippedPlaneSurface — wires PlaneSurface + BoundsClipper
+        var clippedSurface = surface.AddComponent<ClippedPlaneSurface>();
+        SetSerializedField(clippedSurface, "_planeSurface", planeSurface);
+        SetSerializedInterfaceListField(clippedSurface, "_clippers", new Object[] { boundsClipper });
+
+        // ---- PokeInteractable on root ----
+        var pokeInteractable = root.AddComponent<PokeInteractable>();
+        SetSerializedInterfaceField(pokeInteractable, "_surfacePatch", clippedSurface);
+        SetSerializedField(pokeInteractable, "_enterHoverNormal", 0.065f);
+        SetSerializedField(pokeInteractable, "_exitHoverNormal", 0.08f);
+        SetSerializedField(pokeInteractable, "_cancelSelectNormal", 0.2f);
+
+        // MinThresholds config
+        var so = new SerializedObject(pokeInteractable);
+        var minThreshProp = so.FindProperty("_minThresholds");
+        if (minThreshProp != null)
+        {
+            var enabledProp = minThreshProp.FindPropertyRelative("Enabled");
+            var minNormalProp = minThreshProp.FindPropertyRelative("MinNormal");
+            if (enabledProp != null) enabledProp.boolValue = true;
+            if (minNormalProp != null) minNormalProp.floatValue = 0.015f;
+        }
+        so.ApplyModifiedPropertiesWithoutUndo();
+
+        // ---- InteractableUnityEventWrapper — wires WhenSelect to ButtonClickRelay.Invoke ----
+        var eventWrapper = root.AddComponent<InteractableUnityEventWrapper>();
+        SetSerializedInterfaceField(eventWrapper, "_interactableView", pokeInteractable);
+
+        // ---- ButtonClickRelay for reflection-based method invocation ----
+        var relay = root.AddComponent<ButtonClickRelay>();
+        // Target and method will be set by WireButtonEvent after creation
+
+        // Wire WhenSelect -> relay.Invoke() + relay.FlashButton()
+        WireUnityEventPersistent(eventWrapper, "_whenSelect", relay, "Invoke");
+        WireUnityEventPersistent(eventWrapper, "_whenSelect", relay, "FlashButton");
+
+        // ---- Visuals ----
+        var visuals = CreateChild(root, "Visuals");
+
+        // Button visual (quad)
+        var buttonVisual = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        buttonVisual.name = "ButtonVisual";
+        buttonVisual.transform.SetParent(visuals.transform, false);
+        buttonVisual.transform.localPosition = Vector3.zero;
+        buttonVisual.transform.localScale = new Vector3(width, height, 1f);
+
+        // Remove default mesh collider from quad
+        var quadCollider = buttonVisual.GetComponent<MeshCollider>();
         if (quadCollider != null)
         {
             Object.DestroyImmediate(quadCollider);
         }
 
         // Material
-        var renderer = visual.GetComponent<MeshRenderer>();
+        var renderer = buttonVisual.GetComponent<MeshRenderer>();
         var mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
         mat.color = new Color(0.2f, 0.2f, 0.3f, 1f);
         renderer.sharedMaterial = mat;
 
         // Text label
         var textGO = new GameObject("Label");
-        textGO.transform.SetParent(visual.transform);
+        textGO.transform.SetParent(buttonVisual.transform, false);
         textGO.transform.localPosition = new Vector3(0f, 0f, -0.01f);
         textGO.transform.localScale = new Vector3(1f / width, 1f / height, 1f);
         var tmp = textGO.AddComponent<TextMeshPro>();
@@ -299,7 +369,7 @@ public static class KinesResearchSceneBuilder
         // Backdrop
         var backdrop = GameObject.CreatePrimitive(PrimitiveType.Quad);
         backdrop.name = "ButtonBack";
-        backdrop.transform.SetParent(root.transform);
+        backdrop.transform.SetParent(visuals.transform, false);
         backdrop.transform.localPosition = new Vector3(0f, 0f, 0.001f);
         backdrop.transform.localScale = new Vector3(width + 0.005f, height + 0.005f, 1f);
         var backCollider = backdrop.GetComponent<MeshCollider>();
@@ -312,7 +382,7 @@ public static class KinesResearchSceneBuilder
         backMat.color = new Color(0.1f, 0.1f, 0.15f, 1f);
         backRenderer.sharedMaterial = backMat;
 
-        // Add a box collider on the root for poke interaction
+        // Box collider on root for poke interaction detection
         var boxCol = root.AddComponent<BoxCollider>();
         boxCol.size = new Vector3(width, height, 0.02f);
         boxCol.isTrigger = true;
@@ -321,27 +391,26 @@ public static class KinesResearchSceneBuilder
     }
 
     /// <summary>
-    /// Wires a button's click event to a method on a component using UnityEvents at edit-time.
+    /// Wires a button's click event to a method on a component via ButtonClickRelay.
     /// </summary>
     private static void WireButtonEvent(GameObject button, UnityEngine.Object target, string methodName)
     {
-        // We use a simple MonoBehaviour-based approach:
-        // Add a ButtonEventRelay that calls the method on click.
-        // Since PokeInteractable requires the Interaction SDK to be imported,
-        // we add it conditionally.
-        // For now, store the wiring info so it can be connected at runtime or
-        // once the Interaction SDK compiles.
-
-        // The pragmatic approach: we'll use the ISDK components if available,
-        // otherwise fall back to a lightweight collider-based approach.
-        // Since the SDK may not be compiled yet, we store metadata.
-        var relay = button.AddComponent<ButtonClickRelay>();
+        var relay = button.GetComponent<ButtonClickRelay>();
+        if (relay == null)
+        {
+            relay = button.AddComponent<ButtonClickRelay>();
+        }
         relay.targetObject = target as Component;
         relay.methodName = methodName;
     }
 
     // ==================== Grabbable Helper ====================
 
+    /// <summary>
+    /// Makes an object grabbable with ISDK HandGrabInteractable (and optionally ray/distance grab).
+    /// Adds: Rigidbody (kinematic), Grabbable, HandGrabInteractable child,
+    /// and optionally RayInteractable + DistanceHandGrabInteractable children.
+    /// </summary>
     private static void MakeGrabbable(GameObject target, bool includeRayGrab = false, bool includeDistanceGrab = false)
     {
         // Rigidbody
@@ -354,24 +423,45 @@ public static class KinesResearchSceneBuilder
         rb.useGravity = false;
 
         // Collider (BoxCollider if none exists)
-        if (target.GetComponent<Collider>() == null)
+        var existingCollider = target.GetComponent<Collider>();
+        if (existingCollider == null)
         {
             var col = Undo.AddComponent<BoxCollider>(target);
             col.isTrigger = true;
         }
 
-        // Hand grab interaction child
-        var handGrab = CreateChild(target, "ISDK_HandGrabInteraction");
-        // Placeholder — actual ISDK components will be added once Interaction SDK compiles
+        // Grabbable component (ISDK base for grab interactions)
+        if (target.GetComponent<Grabbable>() == null)
+        {
+            target.AddComponent<Grabbable>();
+        }
+
+        // ---- ISDK_HandGrabInteraction child ----
+        var handGrabGO = CreateChild(target, "ISDK_HandGrabInteraction");
+        var handGrabInteractable = handGrabGO.AddComponent<HandGrabInteractable>();
+        SetSerializedField(handGrabInteractable, "_rigidbody", rb);
+        SetSerializedField(handGrabInteractable, "_supportedGrabTypes", (int)GrabTypeFlags.All);
 
         if (includeRayGrab)
         {
-            CreateChild(target, "ISDK_RayGrabInteraction");
+            // ---- ISDK_RayGrabInteraction child ----
+            var rayGrabGO = CreateChild(target, "ISDK_RayGrabInteraction");
+
+            // RayInteractable needs a surface — add PlaneSurface on the child
+            var raySurface = rayGrabGO.AddComponent<PlaneSurface>();
+            raySurface.Facing = PlaneSurface.NormalFacing.Forward;
+
+            var rayInteractable = rayGrabGO.AddComponent<RayInteractable>();
+            SetSerializedInterfaceField(rayInteractable, "_surface", raySurface);
         }
 
         if (includeDistanceGrab)
         {
-            CreateChild(target, "ISDK_DistanceHandGrabInteraction");
+            // ---- ISDK_DistanceHandGrabInteraction child ----
+            var distGrabGO = CreateChild(target, "ISDK_DistanceHandGrabInteraction");
+            var distGrabInteractable = distGrabGO.AddComponent<DistanceHandGrabInteractable>();
+            SetSerializedField(distGrabInteractable, "_rigidbody", rb);
+            SetSerializedField(distGrabInteractable, "_supportedGrabTypes", (int)GrabTypeFlags.Pinch);
         }
     }
 
@@ -452,6 +542,7 @@ public static class KinesResearchSceneBuilder
         col.size = new Vector3(0.2f, 0.5f, 0.05f);
         col.isTrigger = true;
 
+        // All 3 grab types for experimenter access from any distance/input
         MakeGrabbable(staff, includeRayGrab: true, includeDistanceGrab: true);
 
         // Button definitions (single column)
@@ -517,7 +608,6 @@ public static class KinesResearchSceneBuilder
         var renderer = cube.GetComponent<MeshRenderer>();
         var mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
         mat.color = color;
-        mat.SetFloat("_Surface", 1); // transparent-ish
         renderer.sharedMaterial = mat;
 
         return cube;
@@ -538,7 +628,6 @@ public static class KinesResearchSceneBuilder
     /// </summary>
     private static void EnsureTagExists(string tag)
     {
-        // Check if tag already exists
         for (int i = 0; i < UnityEditorInternal.InternalEditorUtility.tags.Length; i++)
         {
             if (UnityEditorInternal.InternalEditorUtility.tags[i] == tag)
@@ -547,5 +636,126 @@ public static class KinesResearchSceneBuilder
             }
         }
         UnityEditorInternal.InternalEditorUtility.AddTag(tag);
+    }
+
+    // ==================== SerializedObject Helpers ====================
+    // ISDK components use private [SerializeField] fields (often with [Interface] attribute
+    // serialized as UnityEngine.Object). These helpers set them via SerializedObject.
+
+    /// <summary>
+    /// Sets a serialized field on a component via SerializedObject.
+    /// Works for object references, floats, ints, enums, etc.
+    /// </summary>
+    private static void SetSerializedField(Component component, string fieldName, Object value)
+    {
+        var so = new SerializedObject(component);
+        var prop = so.FindProperty(fieldName);
+        if (prop != null)
+        {
+            prop.objectReferenceValue = value;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+        else
+        {
+            Debug.LogWarning($"SetSerializedField: Property '{fieldName}' not found on {component.GetType().Name}");
+        }
+    }
+
+    private static void SetSerializedField(Component component, string fieldName, float value)
+    {
+        var so = new SerializedObject(component);
+        var prop = so.FindProperty(fieldName);
+        if (prop != null)
+        {
+            prop.floatValue = value;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+        else
+        {
+            Debug.LogWarning($"SetSerializedField: Property '{fieldName}' not found on {component.GetType().Name}");
+        }
+    }
+
+    private static void SetSerializedField(Component component, string fieldName, int value)
+    {
+        var so = new SerializedObject(component);
+        var prop = so.FindProperty(fieldName);
+        if (prop != null)
+        {
+            prop.intValue = value;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+        else
+        {
+            Debug.LogWarning($"SetSerializedField: Property '{fieldName}' not found on {component.GetType().Name}");
+        }
+    }
+
+    /// <summary>
+    /// Sets a [SerializeField, Interface(typeof(T))] field which is serialized as UnityEngine.Object.
+    /// This is how ISDK stores interface references (e.g., ISurfacePatch, IInteractableView).
+    /// </summary>
+    private static void SetSerializedInterfaceField(Component component, string fieldName, Object value)
+    {
+        SetSerializedField(component, fieldName, value);
+    }
+
+    /// <summary>
+    /// Sets a List of [Interface] fields (e.g., ClippedPlaneSurface._clippers).
+    /// </summary>
+    private static void SetSerializedInterfaceListField(Component component, string fieldName, Object[] values)
+    {
+        var so = new SerializedObject(component);
+        var prop = so.FindProperty(fieldName);
+        if (prop != null && prop.isArray)
+        {
+            prop.ClearArray();
+            for (int i = 0; i < values.Length; i++)
+            {
+                prop.InsertArrayElementAtIndex(i);
+                prop.GetArrayElementAtIndex(i).objectReferenceValue = values[i];
+            }
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+        else
+        {
+            Debug.LogWarning($"SetSerializedInterfaceListField: Array property '{fieldName}' not found on {component.GetType().Name}");
+        }
+    }
+
+    /// <summary>
+    /// Adds a persistent listener to a serialized UnityEvent field at edit-time.
+    /// Uses UnityEventTools to persist the listener into the scene/prefab.
+    /// </summary>
+    private static void WireUnityEventPersistent(Component component, string eventFieldName, Object target, string methodName)
+    {
+        var so = new SerializedObject(component);
+        var eventProp = so.FindProperty(eventFieldName);
+        if (eventProp == null)
+        {
+            Debug.LogWarning($"WireUnityEventPersistent: Property '{eventFieldName}' not found on {component.GetType().Name}");
+            return;
+        }
+
+        // Use reflection to get the actual UnityEvent field and add persistent listener
+        var fieldInfo = component.GetType().GetField(eventFieldName,
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        if (fieldInfo != null)
+        {
+            var unityEvent = fieldInfo.GetValue(component) as UnityEvent;
+            if (unityEvent != null)
+            {
+                var targetMethod = UnityEventBase.GetValidMethodInfo(target, methodName, new System.Type[0]);
+                if (targetMethod != null)
+                {
+                    var action = System.Delegate.CreateDelegate(typeof(UnityAction), target, targetMethod) as UnityAction;
+                    UnityEventTools.AddPersistentListener(unityEvent, action);
+                }
+                else
+                {
+                    Debug.LogWarning($"WireUnityEventPersistent: Method '{methodName}' not found on {target.GetType().Name}");
+                }
+            }
+        }
     }
 }
