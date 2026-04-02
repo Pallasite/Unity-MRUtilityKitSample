@@ -7,7 +7,8 @@ public class TrialCounter : MonoBehaviour
     //reference to the textmeshpro component on this object
     public List<TMPro.TextMeshPro> trial_counter_text;
 
-    private bool active_trial = false;
+    // ??? Not sure why this caused a compiler error
+    // private bool active_trial = false;
 
     //reference to the CSVLoader script on this object
     public CSVLoader csv_loader;

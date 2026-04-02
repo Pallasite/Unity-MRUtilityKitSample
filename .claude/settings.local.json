@@ -32,7 +32,8 @@
       "Bash(for file:*)",
       "Bash(do echo:*)",
       "Read(//c/_G/Unity-MRUtilityKitSample/**)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(find \"C:/_G/Unity-MRUtilityKitSample/Library/PackageCache\" -maxdepth 1 -type d -name \"*interaction*\" 2>/dev/null | head -20)"
     ]
   }
 }

@@ -30,7 +30,7 @@ public class DefaultObstacleBehavior : MonoBehaviour, IObstacleBehavior
         foreach (var rigid_body in child_physics)
         {
             rigid_body.angularVelocity = Vector3.zero;
-            rigid_body.velocity = Vector3.zero;
+            rigid_body.linearVelocity = Vector3.zero;
         }
 
         // Reset to local origin (relative to parent anchor)

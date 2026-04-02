@@ -84,3 +84,6 @@ crashlytics-build.properties
 .idea/
 # VS Code cache directory
 .vscode/
+Packages/com.unity.ai.assistant/RelayApp~/relay_win.exe
+Packages/com.unity.ai.assistant/RelayApp~/gateway/codex-acp.exe
+Packages/com.unity.ai.assistant/RelayApp~/relay_linux
